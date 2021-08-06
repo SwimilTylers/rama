@@ -1,14 +1,19 @@
 package utils
 
 import (
+	"context"
 	"time"
 
 	networkingv1 "github.com/oecp/rama/pkg/apis/networking/v1"
 	"github.com/oecp/rama/pkg/constants"
 	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog"
 )
 
 const (
@@ -46,4 +51,13 @@ func SelectorClusterName(clusterName string) labels.Selector {
 		constants.LabelCluster: clusterName,
 	}
 	return labels.SelectorFromSet(s)
+}
+
+func GetUUID(client kubernetes.Interface) (types.UID, error) {
+	ns, err := client.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("Can't get uuid. err=%v", err)
+		return "", err
+	}
+	return ns.UID, nil
 }

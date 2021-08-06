@@ -20,7 +20,7 @@ func GenRemoteVtepName(clusterName string, nodeName string) string {
 	return fmt.Sprintf(remoteVtepNameFormat, clusterName, nodeName)
 }
 
-func NewRemoteVtep(clusterName string, uid types.UID, vtepIP, macAddr, nodeName string, podIPList []string) *networkingv1.RemoteVtep {
+func NewRemoteVtep(clusterName string, uid types.UID, vtepIP, macAddr, nodeName string, endpointIPList []string) *networkingv1.RemoteVtep {
 	vtep := &networkingv1.RemoteVtep{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: GenRemoteVtepName(clusterName, nodeName),
@@ -38,11 +38,11 @@ func NewRemoteVtep(clusterName string, uid types.UID, vtepIP, macAddr, nodeName 
 			},
 		},
 		Spec: networkingv1.RemoteVtepSpec{
-			ClusterName: clusterName,
-			NodeName:    nodeName,
-			VtepIP:      vtepIP,
-			VtepMAC:     macAddr,
-			IPList:      podIPList,
+			ClusterName:    clusterName,
+			NodeName:       nodeName,
+			VtepIP:         vtepIP,
+			VtepMAC:        macAddr,
+			EndpointIPList: endpointIPList,
 		},
 		Status: networkingv1.RemoteVtepStatus{
 			LastModifyTime: metav1.Now(),

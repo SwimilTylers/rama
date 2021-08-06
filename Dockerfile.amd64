@@ -50,9 +50,13 @@ COPY dist/images/iptables-wrapper-installer.sh /
 RUN /iptables-wrapper-installer.sh --no-sanity-check
 
 ENV CNI_VERSION=v0.9.1
-RUN mkdir -p cni-plugins/ && \
-    curl -SL https://github.com/containernetworking/plugins/releases/download/${CNI_VERSION}/cni-plugins-linux-amd64-${CNI_VERSION}.tgz \
-    | tar -xz -C cni-plugins/
+#RUN mkdir -p cni-plugins/ && \
+#    curl -SL https://github.com/containernetworking/plugins/releases/download/${CNI_VERSION}/cni-plugins-linux-amd64-${CNI_VERSION}.tgz \
+#    | tar -xz -C cni-plugins/
+RUN mkdir -p cni-plugins/
+COPY ./delafterdev/cni-plugins-linux-amd64-v0.9.1.tgz /root
+RUN tar -zxf /root/cni-plugins-linux-amd64-v0.9.1.tgz -C cni-plugins/
+
 
 COPY dist/images/start-daemon.sh /rama/start-daemon.sh
 COPY dist/images/install-cni.sh /rama/install-cni.sh

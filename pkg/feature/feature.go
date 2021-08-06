@@ -56,6 +56,10 @@ func DualStackEnabled() bool {
 	return feature.DefaultMutableFeatureGate.Enabled(DualStack)
 }
 
+func MultiClusterEnabled() bool {
+	return feature.DefaultMutableFeatureGate.Enabled(MultiCluster)
+}
+
 func KnownFeatures() []string {
 	return feature.DefaultMutableFeatureGate.KnownFeatures()
 }
