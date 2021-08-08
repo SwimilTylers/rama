@@ -22,8 +22,9 @@ import (
 	"net"
 
 	extraliptables "github.com/coreos/go-iptables/iptables"
+	"github.com/gogf/gf/container/gset"
 	"github.com/oecp/rama/pkg/daemon/ipset"
-
+	daemonutils "github.com/oecp/rama/pkg/daemon/utils"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 	"k8s.io/utils/exec"
 )
@@ -66,6 +67,7 @@ type Manager struct {
 	overlaySubnet  []*net.IPNet
 	underlaySubnet []*net.IPNet
 	nodeIPList     []net.IP
+	localCidr      *gset.StrSet
 
 	overlayIfName string
 
@@ -77,7 +79,8 @@ type Manager struct {
 	remoteOverlaySubnet  []*net.IPNet
 	remoteUnderlaySubnet []*net.IPNet
 	remoteNodeIPList     []net.IP
-	remoteOverlayIfName  string
+	remoteSubnetTracker  *daemonutils.SubnetCidrTracker
+	remoteCidr           *gset.StrSet
 }
 
 func (mgr *Manager) lock() {
@@ -121,6 +124,7 @@ func CreateIPtablesManager(protocol Protocol) (*Manager, error) {
 		overlaySubnet:  []*net.IPNet{},
 		underlaySubnet: []*net.IPNet{},
 		nodeIPList:     []net.IP{},
+		localCidr:      gset.NewStrSet(),
 
 		protocol: protocol,
 		c:        make(chan struct{}, 1),
@@ -128,7 +132,8 @@ func CreateIPtablesManager(protocol Protocol) (*Manager, error) {
 		remoteOverlaySubnet:  []*net.IPNet{},
 		remoteUnderlaySubnet: []*net.IPNet{},
 		remoteNodeIPList:     []net.IP{},
-		remoteOverlayIfName:  RemoteOverlayNotExists,
+		remoteSubnetTracker:  daemonutils.NewSubnetCidrTracker(),
+		remoteCidr:           gset.NewStrSet(),
 	}
 
 	return mgr, nil
@@ -138,6 +143,7 @@ func (mgr *Manager) Reset() {
 	mgr.overlaySubnet = []*net.IPNet{}
 	mgr.underlaySubnet = []*net.IPNet{}
 	mgr.nodeIPList = []net.IP{}
+	mgr.localCidr.Clear()
 	mgr.overlayIfName = ""
 }
 
@@ -151,6 +157,8 @@ func (mgr *Manager) RecordSubnet(subnetCidr *net.IPNet, isOverlay bool) {
 	} else {
 		mgr.underlaySubnet = append(mgr.underlaySubnet, subnetCidr)
 	}
+
+	mgr.localCidr.Add(subnetCidr.String())
 }
 
 func (mgr *Manager) SetOverlayIfName(overlayIfName string) {
@@ -164,17 +172,10 @@ func (mgr *Manager) SyncRules() error {
 	// check out remote subnet configurations
 	configRemote, rcErr := mgr.configureRemote()
 	if rcErr != nil {
-		return fmt.Errorf("canot sync iptables rules with illegal remote overlay interface name, [local=%s, remote=%s]",
-			mgr.overlayIfName, mgr.remoteOverlayIfName)
+		return fmt.Errorf("iptables manager detects illegal remote subnet config: %v", rcErr)
 	}
 
-	// find out overlay interface name
-	var overlayIfName = mgr.overlayIfName
-	if mgr.isValidRemoteOverlayIfName() {
-		overlayIfName = mgr.remoteOverlayIfName
-	}
-
-	if overlayIfName == "" {
+	if mgr.overlayIfName == "" {
 		return fmt.Errorf("cannot sync iptables rules with empty overlay interface name")
 	}
 
@@ -248,8 +249,8 @@ func (mgr *Manager) SyncRules() error {
 	writeLine(mangleChains, utiliptables.MakeChainLine(ChainRamaPostRouting))
 
 	// Append rules.
-	writeLine(natRules, generateMasqueradeRuleSpec(overlayIfName, mgr.protocol)...)
-	writeLine(filterRules, generateVxlanFilterRuleSpec(overlayIfName, mgr.protocol)...)
+	writeLine(natRules, generateMasqueradeRuleSpec(mgr.overlayIfName, mgr.protocol)...)
+	writeLine(filterRules, generateVxlanFilterRuleSpec(mgr.overlayIfName, mgr.protocol)...)
 	writeLine(mangleRules, generateVxlanPodToNodeReplyMarkRuleSpec(mgr.protocol)...)
 	writeLine(mangleRules, generateVxlanPodToNodeReplyRemoveMarkRuleSpec(mgr.protocol)...)
 

@@ -7,51 +7,39 @@ import (
 	daemonutils "github.com/oecp/rama/pkg/daemon/utils"
 )
 
-const (
-	RemoteOverlayNotExists = "#nonexist"
-	RemoteOverlayConflict  = "#conflict"
-)
-
 func (m *Manager) ResetRemoteInfos() {
 	m.remoteOverlaySubnetInfoMap = SubnetInfoMap{}
 	m.remoteUnderlaySubnetInfoMap = SubnetInfoMap{}
-	m.remoteOverlayIfName = RemoteOverlayNotExists
+	m.remoteSubnetTracker.Refresh()
+	m.remoteCidr.Clear()
 }
 
-func (m *Manager) AddRemoteOverlaySubnetInfo(cidr *net.IPNet, gateway, start, end net.IP, excludeIPs []net.IP, forwardNodeIfName string) {
-	m.addRemoteSubnetInfo(cidr, gateway, start, end, excludeIPs, forwardNodeIfName, true)
-}
+func (m *Manager) AddRemoteSubnetInfo(cluster string, cidr *net.IPNet, gateway, start, end net.IP, excludeIPs []net.IP, isOverlay bool) error {
+	cidrString := cidr.String()
 
-func (m *Manager) AddRemoteUnderlaySubnetInfo(cidr *net.IPNet, gateway, start, end net.IP, excludeIPs []net.IP) {
-	m.addRemoteSubnetInfo(cidr, gateway, start, end, excludeIPs, "", false)
-}
-
-func (m *Manager) addRemoteSubnetInfo(cidr *net.IPNet, gateway, start, end net.IP, excludeIPs []net.IP,
-	forwardNodeIfName string, isOverlay bool) {
+	if err := m.remoteSubnetTracker.Track(cidrString, cluster); err != nil {
+		return err
+	}
 
 	var subnetInfo *SubnetInfo
 	if isOverlay {
-		cidrString := cidr.String()
 		if _, exists := m.remoteOverlaySubnetInfoMap[cidrString]; !exists {
 			m.remoteOverlaySubnetInfoMap[cidrString] = &SubnetInfo{
-				cidr:              cidr,
-				forwardNodeIfName: forwardNodeIfName,
-				gateway:           gateway,
-				includedIPRanges:  []*daemonutils.IPRange{},
-				excludeIPs:        []net.IP{},
+				cidr:             cidr,
+				gateway:          gateway,
+				includedIPRanges: []*daemonutils.IPRange{},
+				excludeIPs:       []net.IP{},
 			}
 		}
 
 		subnetInfo = m.remoteOverlaySubnetInfoMap[cidrString]
 	} else {
-		cidrString := cidr.String()
 		if _, exists := m.remoteUnderlaySubnetInfoMap[cidrString]; !exists {
 			m.remoteUnderlaySubnetInfoMap[cidrString] = &SubnetInfo{
-				cidr:              cidr,
-				forwardNodeIfName: forwardNodeIfName,
-				gateway:           gateway,
-				includedIPRanges:  []*daemonutils.IPRange{},
-				excludeIPs:        []net.IP{},
+				cidr:             cidr,
+				gateway:          gateway,
+				includedIPRanges: []*daemonutils.IPRange{},
+				excludeIPs:       []net.IP{},
 			}
 		}
 
@@ -76,18 +64,8 @@ func (m *Manager) addRemoteSubnetInfo(cidr *net.IPNet, gateway, start, end net.I
 		}
 	}
 
-	if isOverlay {
-		// fresh remoteOverlayIfName
-		switch m.remoteOverlayIfName {
-		case RemoteOverlayNotExists:
-			m.remoteOverlayIfName = forwardNodeIfName
-		case RemoteOverlayConflict:
-		default:
-			if m.remoteOverlayIfName != forwardNodeIfName {
-				m.remoteOverlayIfName = RemoteOverlayConflict
-			}
-		}
-	}
+	m.remoteCidr.Add(cidrString)
+	return nil
 }
 
 func (m *Manager) configureRemote() (bool, error) {
@@ -95,19 +73,13 @@ func (m *Manager) configureRemote() (bool, error) {
 		return false, nil
 	}
 
-	if len(m.remoteOverlaySubnetInfoMap) != 0 {
-		if m.remoteOverlayIfName != RemoteOverlayConflict &&
-			m.remoteOverlayIfName != RemoteOverlayNotExists &&
-			(m.overlayIfName == "" || m.remoteOverlayIfName == m.overlayIfName) {
-			return true, nil
-		}
+	if err := m.remoteSubnetTracker.Conflict(); err != nil {
+		return false, err
+	}
 
-		return false, fmt.Errorf("invalid remote overlay net interface configuration [local=%s, remote=%s]", m.overlayIfName, m.remoteOverlayIfName)
+	if conflict := m.remoteCidr.Intersect(m.localCidr); conflict.Size() > 0 {
+		return false, fmt.Errorf("local cluster and remote clusters have a conflict in subnet config [%s]", conflict)
 	}
 
 	return true, nil
-}
-
-func (m *Manager) isValidRemoteOverlayIfName() bool {
-	return m.remoteOverlayIfName != RemoteOverlayNotExists && m.remoteOverlayIfName != RemoteOverlayConflict
 }

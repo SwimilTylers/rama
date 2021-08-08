@@ -5,40 +5,31 @@ import (
 	"net"
 )
 
-const (
-	RemoteOverlayNotExists = "#nonexist"
-	RemoteOverlayConflict  = "#conflict"
-)
-
 func (mgr *Manager) ResetRemote() {
 	mgr.remoteOverlaySubnet = []*net.IPNet{}
 	mgr.remoteUnderlaySubnet = []*net.IPNet{}
 	mgr.remoteNodeIPList = []net.IP{}
-	mgr.remoteOverlayIfName = RemoteOverlayNotExists
+	mgr.remoteSubnetTracker.Refresh()
+	mgr.remoteCidr.Clear()
 }
 
 func (mgr *Manager) RecordRemoteNodeIP(nodeIP net.IP) {
 	mgr.remoteNodeIPList = append(mgr.remoteNodeIPList, nodeIP)
 }
 
-func (mgr *Manager) RecordRemoteSubnet(subnetCidr *net.IPNet, isOverlay bool) {
+func (mgr *Manager) RecordRemoteSubnet(cluster string, subnetCidr *net.IPNet, isOverlay bool) error {
+	if err := mgr.remoteSubnetTracker.Track(subnetCidr.String(), cluster); err != nil {
+		return err
+	}
+
 	if isOverlay {
 		mgr.remoteOverlaySubnet = append(mgr.remoteOverlaySubnet, subnetCidr)
 	} else {
 		mgr.remoteUnderlaySubnet = append(mgr.remoteUnderlaySubnet, subnetCidr)
 	}
-}
 
-func (mgr *Manager) SetRemoteOverlayIfName(overlayIfName string) {
-	switch mgr.remoteOverlayIfName {
-	case RemoteOverlayNotExists:
-		mgr.remoteOverlayIfName = overlayIfName
-	case RemoteOverlayConflict:
-	default:
-		if mgr.remoteOverlayIfName != overlayIfName {
-			mgr.remoteOverlayIfName = RemoteOverlayConflict
-		}
-	}
+	mgr.remoteCidr.Add(subnetCidr.String())
+	return nil
 }
 
 func (mgr *Manager) configureRemote() (bool, error) {
@@ -46,19 +37,13 @@ func (mgr *Manager) configureRemote() (bool, error) {
 		return false, nil
 	}
 
-	if len(mgr.remoteOverlaySubnet) != 0 {
-		if mgr.remoteOverlayIfName != RemoteOverlayConflict &&
-			mgr.remoteOverlayIfName != RemoteOverlayNotExists &&
-			(mgr.overlayIfName == "" || mgr.remoteOverlayIfName == mgr.overlayIfName) {
-			return true, nil
-		}
+	if err := mgr.remoteSubnetTracker.Conflict(); err != nil {
+		return false, err
+	}
 
-		return false, fmt.Errorf("invalid remote overlay net interface configuration [local=%s, remote=%s]", mgr.overlayIfName, mgr.remoteOverlayIfName)
+	if conflict := mgr.remoteCidr.Intersect(mgr.localCidr); conflict.Size() > 0 {
+		return false, fmt.Errorf("local cluster and remote clusters have a conflict in subnet config [%s]", conflict)
 	}
 
 	return true, nil
-}
-
-func (mgr *Manager) isValidRemoteOverlayIfName() bool {
-	return mgr.remoteOverlayIfName != RemoteOverlayNotExists && mgr.remoteOverlayIfName != RemoteOverlayConflict
 }

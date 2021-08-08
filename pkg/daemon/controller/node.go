@@ -153,7 +153,6 @@ func (c *Controller) reconcileNodeInfo() error {
 		return fmt.Errorf("failed to list network %v", err)
 	}
 
-	remoteSubnetList, err := c.remoteSubnetLister.List(labels.Everything())
 	if err != nil {
 		return fmt.Errorf("failed to list remote subnet %v", err)
 	}
@@ -162,14 +161,6 @@ func (c *Controller) reconcileNodeInfo() error {
 	for _, network := range networkList {
 		if ramav1.GetNetworkType(network) == ramav1.NetworkTypeOverlay {
 			overlayNetID = network.Spec.NetID
-			break
-		}
-	}
-
-	// extract overlayNetID from remote subnets
-	for _, remoteSubnet := range remoteSubnetList {
-		if ramav1.GetRemoteSubnetType(remoteSubnet) == ramav1.NetworkTypeOverlay {
-			overlayNetID = remoteSubnet.Spec.TunnelNetID
 			break
 		}
 	}
