@@ -37,10 +37,16 @@ const (
 	//
 	// Enable dual stack allocation in IPAM.
 	DualStack featuregate.Feature = "DualStack"
+
+	MultiCluster featuregate.Feature = "MultiCluster"
 )
 
 var DefaultRamaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	DualStack: {
+		Default:    false,
+		PreRelease: featuregate.Alpha,
+	},
+	MultiCluster: {
 		Default:    false,
 		PreRelease: featuregate.Alpha,
 	},
