@@ -41,19 +41,30 @@ func CheckCondition(c *Controller, ramaClient *versioned.Clientset, clusterName 
 		}
 		conditions = append(conditions, cond...)
 	}
+	if meetCondition(conditions) {
+		conditions = []networkingv1.ClusterCondition{utils.NewClusterReady()}
+	}
 	return conditions
 }
 
-func MeetCondition(conditions []networkingv1.ClusterCondition) bool {
-	s := 0
+func IsReady(conditions []networkingv1.ClusterCondition) bool {
+	if len(conditions) == 1 {
+		cond := conditions[0]
+		return cond.Type == networkingv1.ClusterReady && cond.Status == apiv1.ConditionTrue
+	}
+	return false
+}
+
+func meetCondition(conditions []networkingv1.ClusterCondition) bool {
+	cnt := 0
 	for _, c := range conditions {
 		if _, exists := AllReady[c.Type]; exists {
 			if c.Status == apiv1.ConditionTrue {
-				s = s + 1
+				cnt = cnt + 1
 			}
 		}
 	}
-	if s == len(AllReady) {
+	if cnt == len(AllReady) {
 		return true
 	}
 	return false

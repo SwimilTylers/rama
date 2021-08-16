@@ -14,7 +14,6 @@ const (
 	ReasonClusterReady        = "ClusterReady"
 	ReasonHealthCheckReady    = "HealthCheckReady"
 	ReasonClusterNotReachable = "ClusterNotReachable"
-	ReasonClusterNotReady     = "ClusterNotReady"
 	ReasonHealthCheckNotReady = "HealthCheckNotReady"
 	ReasonClusterReachable    = "ClusterReachable"
 	ReasonDoubleConn          = "BothSetRemoteCluster"
@@ -22,12 +21,25 @@ const (
 	ReasonSameOverlayNetID    = "SameOverlayNetIDReady"
 	ReasonNotSameOverlayNetID = "SameOverlayNetIDNotReady"
 
+	MsgClusterReady           = "All check pass"
 	MsgHealthzNotOk           = "/healthz responded without ok"
 	MsgHealthzOk              = "/healthz responded with ok"
 	MsgBidirectionalConnOk    = "Both Clusters have created remote cluster"
 	MsgBidirectionalConnNotOk = "Remote Clusters have not apply remote-cluster-cr about local cluster"
 	MsgSameOverlayNetID       = "Both clusters have same overlay net id"
 )
+
+func NewClusterReady() networkingv1.ClusterCondition {
+	cur := metav1.Now()
+	return networkingv1.ClusterCondition{
+		Type:               networkingv1.ClusterReady,
+		Status:             corev1.ConditionTrue,
+		LastProbeTime:      cur,
+		LastTransitionTime: &cur,
+		Reason:             StringPtr(ReasonClusterReady),
+		Message:            StringPtr(MsgClusterReady),
+	}
+}
 
 func NewHealthCheckReady() networkingv1.ClusterCondition {
 	cur := metav1.Now()

@@ -71,22 +71,22 @@ type Meta struct {
 	// 1. The remote cluster created the remote-cluster-cr of this cluster
 	// 2. The remote cluster and local cluster both have overlay network
 	// 3. The overlay network id is same with local cluster
-	MeetCondition     bool
-	MeetConditionLock sync.RWMutex
+	IsReady     bool
+	IsReadyLock sync.RWMutex
 }
 
-func (m *Manager) GetMeetCondition() bool {
-	m.MeetConditionLock.RLock()
-	defer m.MeetConditionLock.RUnlock()
+func (m *Manager) GetIsReady() bool {
+	m.IsReadyLock.RLock()
+	defer m.IsReadyLock.RUnlock()
 
-	return m.MeetCondition
+	return m.IsReady
 }
 
-func (m *Manager) SetMeetCondition(val bool) {
-	m.MeetConditionLock.Lock()
-	defer m.MeetConditionLock.Unlock()
+func (m *Manager) SetIsReady(val bool) {
+	m.IsReadyLock.Lock()
+	defer m.IsReadyLock.Unlock()
 
-	m.MeetCondition = val
+	m.IsReady = val
 }
 
 func NewRemoteClusterManager(rc *networkingv1.RemoteCluster,
@@ -138,7 +138,7 @@ func NewRemoteClusterManager(rc *networkingv1.RemoteCluster,
 			RemoteClusterUID: rc.UID,
 			ClusterUUID:      uuid,
 			StopCh:           stopCh,
-			MeetCondition:    false,
+			IsReady:          false,
 		},
 		localClusterKubeClient:   localClusterKubeClient,
 		localClusterRamaClient:   localClusterRamaClient,

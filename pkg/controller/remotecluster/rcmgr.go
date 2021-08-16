@@ -74,8 +74,7 @@ func (c *Controller) addOrUpdateRCMgr(rc *networkingv1.RemoteCluster) error {
 		runtime.HandleError(err)
 		return err
 	}
-
-	rcMgr.SetMeetCondition(MeetCondition(conditions))
+	rcMgr.SetIsReady(IsReady(conditions))
 
 	c.rcMgrCache.rcMgrMap[clusterName] = rcMgr
 	c.rcMgrQueue.Add(clusterName)
