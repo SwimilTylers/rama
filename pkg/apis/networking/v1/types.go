@@ -265,9 +265,6 @@ type RemoteSubnetSpec struct {
 	Range       AddressRange `json:"range"`
 	Type        NetworkType  `json:"type"`
 	ClusterName string       `json:"clusterName"`
-	// If the corresponding subnet is in underlay network, it will be set to nil
-	// If it is not nil, use it for to-this-remote-subnet tunneling. If it is nil, use local vxlan net id instead.
-	TunnelNetID *uint32 `json:"tunnelNetID"`
 }
 
 // RemoteSubnetStatus is the status for a RemoteSubnet resource
