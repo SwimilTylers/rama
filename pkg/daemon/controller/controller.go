@@ -499,19 +499,6 @@ func (c *Controller) iptablesSyncLoop() {
 		var remoteOverlayExist bool
 		for _, remoteSubnet := range remoteSubnetList {
 			if ramav1.GetRemoteSubnetType(remoteSubnet) == ramav1.NetworkTypeOverlay {
-				var netID = remoteSubnet.Spec.TunnelNetID
-				if netID == nil {
-					return fmt.Errorf("a remote overlay subnet [%v] misses its net id", remoteSubnet.Name)
-				}
-
-				remoteOverlayIfName, err := containernetwork.GenerateVxlanNetIfName(c.config.NodeVxlanIfName, netID)
-				if err != nil {
-					return fmt.Errorf("generate vxlan forward node if name failed: %v", err)
-				}
-
-				c.iptablesV4Manager.SetRemoteOverlayIfName(remoteOverlayIfName)
-				c.iptablesV6Manager.SetRemoteOverlayIfName(remoteOverlayIfName)
-
 				remoteOverlayExist = true
 				break
 			}
@@ -601,8 +588,10 @@ func (c *Controller) iptablesSyncLoop() {
 					return fmt.Errorf("parse remote subnet cidr %v failed: %v", remoteSubnet.Spec.Range.CIDR, err)
 				}
 
-				c.getIPtablesManager(remoteSubnet.Spec.Range.Version).
-					RecordRemoteSubnet(cidr, ramav1.GetRemoteSubnetType(remoteSubnet) == ramav1.NetworkTypeOverlay)
+				if err = c.getIPtablesManager(remoteSubnet.Spec.Range.Version).
+					RecordRemoteSubnet(remoteSubnet.Spec.ClusterName, cidr, ramav1.GetRemoteSubnetType(remoteSubnet) == ramav1.NetworkTypeOverlay); err != nil {
+					return fmt.Errorf("cannot record remote subnet: %v", err)
+				}
 			}
 		}
 
@@ -669,7 +658,7 @@ func indexByInstanceIP(obj interface{}) ([]string, error) {
 var indexByEndpointIPList cache.IndexFunc = func(obj interface{}) ([]string, error) {
 	vtep, ok := obj.(*ramav1.RemoteVtep)
 	if ok {
-		podIPs := vtep.Spec.IPList
+		podIPs := vtep.Spec.EndpointIPList
 		if len(podIPs) > 0 {
 			return podIPs, nil
 		}

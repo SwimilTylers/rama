@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	ramav1 "github.com/oecp/rama/pkg/apis/networking/v1"
-	"github.com/oecp/rama/pkg/daemon/containernetwork"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog"
 )
@@ -60,7 +59,8 @@ func (c *Controller) enqueueUpdateRemoteVtep(oldObj, newObj interface{}) {
 	newRv := newObj.(*ramav1.RemoteVtep)
 
 	if oldRv.Spec.VtepIP != newRv.Spec.VtepIP ||
-		oldRv.Spec.VtepMAC != newRv.Spec.VtepMAC || !isIPListEqual(oldRv.Spec.IPList, newRv.Spec.IPList) {
+		oldRv.Spec.VtepMAC != newRv.Spec.VtepMAC ||
+		!isIPListEqual(oldRv.Spec.EndpointIPList, newRv.Spec.EndpointIPList) {
 		c.nodeQueue.Add(ActionReconcileNode)
 	}
 }
@@ -73,12 +73,7 @@ func (c *Controller) enqueueUpdateRemoteSubnet(oldObj, newObj interface{}) {
 	oldRs := oldObj.(*ramav1.RemoteSubnet)
 	newRs := newObj.(*ramav1.RemoteSubnet)
 
-	oldRsNetID := oldRs.Spec.TunnelNetID
-	newRsNetID := newRs.Spec.TunnelNetID
-
-	if (oldRsNetID == nil && newRsNetID != nil) ||
-		(oldRsNetID != nil && newRsNetID == nil) ||
-		(oldRsNetID != nil && newRsNetID != nil && *oldRsNetID != *newRsNetID) ||
+	if oldRs.Spec.ClusterName != newRs.Spec.ClusterName ||
 		!isAddressRangeEqual(&oldRs.Spec.Range, &newRs.Spec.Range) ||
 		ramav1.GetRemoteSubnetType(oldRs) != ramav1.GetRemoteSubnetType(newRs) {
 		c.remoteSubnetQueue.Add(ActionReconcileRemoteSubnet)
@@ -139,19 +134,13 @@ func (c *Controller) reconcileRemoteSubnet() error {
 			return fmt.Errorf("parse subnet %v spec range meta failed: %v", remoteSubnet.Name, err)
 		}
 
-		switch ramav1.GetRemoteSubnetType(remoteSubnet) {
-		case ramav1.NetworkTypeUnderlay:
-			c.getRouterManager(remoteSubnet.Spec.Range.Version).AddRemoteUnderlaySubnetInfo(subnetCidr, gatewayIP, startIP, endIP, excludeIPs)
-		case ramav1.NetworkTypeOverlay:
-			var netID = remoteSubnet.Spec.TunnelNetID
-			if netID == nil {
-				return fmt.Errorf("a remote overlay subnet [%v] misses its net id", remoteSubnet.Name)
-			}
-			forwardNodeIfName, vxErr := containernetwork.GenerateVxlanNetIfName(c.config.NodeVxlanIfName, netID)
-			if vxErr != nil {
-				return fmt.Errorf("generate vxlan forward node if name failed: %v", err)
-			}
-			c.getRouterManager(remoteSubnet.Spec.Range.Version).AddRemoteOverlaySubnetInfo(subnetCidr, gatewayIP, startIP, endIP, excludeIPs, forwardNodeIfName)
+		var isOverlay = ramav1.GetRemoteSubnetType(remoteSubnet) == ramav1.NetworkTypeOverlay
+
+		routeManager := c.getRouterManager(remoteSubnet.Spec.Range.Version)
+		err = routeManager.AddRemoteSubnetInfo(remoteSubnet.Spec.ClusterName, subnetCidr, gatewayIP, startIP, endIP, excludeIPs, isOverlay)
+
+		if err != nil {
+			return fmt.Errorf("failed to add remote subnet info: %v", err)
 		}
 	}
 
