@@ -171,7 +171,7 @@ func (m *Manager) processNextIPInstance() bool {
 }
 
 func (m *Manager) filterIPInstance(obj interface{}) bool {
-	if !m.GetMeetCondition() {
+	if !m.GetIsReady() {
 		return false
 	}
 	_, ok := obj.(*networkingv1.IPInstance)

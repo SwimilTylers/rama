@@ -204,12 +204,11 @@ func (c *Controller) updateSingleRCStatus(manager *rcmanager.Manager, rc *networ
 		}
 	}()
 	defer wg.Done()
-	manager.MeetConditionLock.Lock()
-	defer manager.MeetConditionLock.Unlock()
+	manager.IsReadyLock.Lock()
+	defer manager.IsReadyLock.Unlock()
 
 	conditions := CheckCondition(c, manager.RamaClient, manager.ClusterName, InitializeChecker)
-	nowCondition := MeetCondition(conditions)
-	manager.MeetCondition = nowCondition
+	manager.IsReady = IsReady(conditions)
 
 	updateLastTransitionTime := func() {
 		conditionChanged := false

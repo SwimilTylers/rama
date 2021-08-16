@@ -235,7 +235,7 @@ func (m *Manager) convertSubnet2RemoteSubnet(subnet *networkingv1.Subnet, networ
 }
 
 func (m *Manager) filterSubnet(obj interface{}) bool {
-	if !m.GetMeetCondition() {
+	if !m.GetIsReady() {
 		return false
 	}
 	_, ok := obj.(*networkingv1.Subnet)
