@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
-	"time"
 
 	networkingv1 "github.com/oecp/rama/pkg/apis/networking/v1"
 	"github.com/oecp/rama/pkg/constants"
@@ -20,7 +19,7 @@ import (
 )
 
 func (m *Manager) reconcileSubnet(key string) error {
-	klog.Infof("Starting reconcile subnet from cluster %v, subnet name=%v", m.ClusterName, key)
+	klog.Infof("[remote cluster] Starting reconcile subnet from cluster %v, subnet name=%v", m.ClusterName, key)
 	if len(key) == 0 {
 		return nil
 	}
@@ -29,7 +28,9 @@ func (m *Manager) reconcileSubnet(key string) error {
 		if k8serror.IsNotFound(err) {
 			name := utils.GenRemoteSubnetName(m.ClusterName, key)
 			err = m.localClusterRamaClient.NetworkingV1().RemoteSubnets().Delete(context.TODO(), name, metav1.DeleteOptions{})
-			return err
+			if k8serror.IsNotFound(err) {
+				return nil
+			}
 		}
 		return err
 	}
@@ -134,7 +135,7 @@ func (m *Manager) RunSubnetWorker() {
 func (m *Manager) validateLocalClusterOverlap(subnet *networkingv1.Subnet, subnets []*networkingv1.Subnet) error {
 	for _, s := range subnets {
 		if utils.Intersect(subnet.Spec.Range.CIDR, subnet.Spec.Range.Version, s.Spec.Range.CIDR, s.Spec.Range.Version) {
-			klog.Warningf("Two subnet intersect. One is from cluster %v, cidr=%v. Another is from lcoal cluster, cidr=%v",
+			klog.Errorf("Two subnet intersect. One is from cluster %v, cidr=%v. Another is from lcoal cluster, cidr=%v",
 				m.ClusterName, subnet.Spec.Range.CIDR, s.Spec.Range.CIDR)
 			return errors.Newf("Overlap network. overlap with other local cluster subnet")
 		}
@@ -150,7 +151,7 @@ func (m *Manager) validateRemoteClusterOverlap(subnet *networkingv1.Subnet, rcSu
 			continue
 		}
 		if utils.Intersect(rc.Spec.Range.CIDR, rc.Spec.Range.Version, subnet.Spec.Range.CIDR, subnet.Spec.Range.Version) {
-			klog.Warningf("Two subnet intersect. One is from cluster %v, cidr=%v. Another is from cluster %v, cidr=%v",
+			klog.Errorf("Two subnet intersect. One is from cluster %v, cidr=%v. Another is from cluster %v, cidr=%v",
 				m.ClusterName, subnet.Spec.Range.CIDR, rc.Spec.ClusterName, rc.Spec.Range.CIDR)
 			return errors.Newf("Overlap network. overlap with other remoteSubnet")
 		}
@@ -219,7 +220,7 @@ func (m *Manager) convertSubnet2RemoteSubnet(subnet *networkingv1.Subnet, networ
 					APIVersion: networkingv1.SchemeGroupVersion.String(),
 					Kind:       "RemoteCluster",
 					Name:       m.ClusterName,
-					UID:        m.UID,
+					UID:        m.RemoteClusterUID,
 					Controller: pointer.BoolPtr(true),
 				},
 			},
@@ -228,16 +229,15 @@ func (m *Manager) convertSubnet2RemoteSubnet(subnet *networkingv1.Subnet, networ
 			Range:       subnet.Spec.Range,
 			Type:        network.Spec.Type,
 			ClusterName: m.ClusterName,
-			TunnelNetID: network.Spec.NetID,
-		},
-		Status: networkingv1.RemoteSubnetStatus{
-			LastModifyTime: metav1.NewTime(time.Now()),
 		},
 	}
 	return rs, nil
 }
 
 func (m *Manager) filterSubnet(obj interface{}) bool {
+	if !m.GetMeetCondition() {
+		return false
+	}
 	_, ok := obj.(*networkingv1.Subnet)
 	return ok
 }
@@ -252,9 +252,6 @@ func (m *Manager) updateSubnet(oldObj, newObj interface{}) {
 	newRC, _ := newObj.(*networkingv1.Subnet)
 
 	if oldRC.ResourceVersion == newRC.ResourceVersion {
-		return
-	}
-	if oldRC.Generation == newRC.Generation {
 		return
 	}
 	m.enqueueSubnet(newRC.ObjectMeta.Name)

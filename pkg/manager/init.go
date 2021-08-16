@@ -56,6 +56,7 @@ func initRemoteClusterController(m *Manager) error {
 		m.RamaInformerFactory.Networking().V1().RemoteSubnets(),
 		m.RamaInformerFactory.Networking().V1().Subnets(),
 		m.RamaInformerFactory.Networking().V1().RemoteVteps(),
+		m.RamaInformerFactory.Networking().V1().Networks(),
 	)
 	return nil
 }

@@ -12,6 +12,7 @@ import (
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	runtimeutil "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog"
 )
@@ -20,7 +21,7 @@ const ReconcileNode = "reconcile-node"
 
 // Full update. Update remote vtep expect status
 func (m *Manager) reconcileNode(key string) error {
-	klog.Infof("Starting reconcile node from cluster %v, node name=%v", m.ClusterName, key)
+	klog.Infof("[remote cluster] Starting reconcile node from cluster %v, node name=%v", m.ClusterName, key)
 	nodes, err := m.nodeLister.List(labels.NewSelector())
 	if err != nil {
 		return err
@@ -45,7 +46,10 @@ func (m *Manager) reconcileNode(key string) error {
 				continue
 			}
 			vtep.Status.LastModifyTime = cur
-			_, _ = m.localClusterRamaClient.NetworkingV1().RemoteVteps().UpdateStatus(context.TODO(), vtep, metav1.UpdateOptions{})
+			_, err = m.localClusterRamaClient.NetworkingV1().RemoteVteps().UpdateStatus(context.TODO(), vtep, metav1.UpdateOptions{})
+			if err != nil {
+				runtimeutil.HandleError(err)
+			}
 		}
 	}()
 
@@ -110,11 +114,11 @@ func (m *Manager) diffNodeAndVtep(nodes []*apiv1.Node, vteps []*networkingv1.Rem
 		vtepMac := node.Annotations[constants.AnnotationNodeVtepMac]
 		if vtep, exists := vtepMap[vtepName]; exists {
 			if vtep.Spec.VtepIP != vtepIP || vtep.Spec.VtepMAC != vtepMac {
-				v := utils.NewRemoteVtep(m.ClusterName, m.UID, vtepIP, vtepMac, node.Name, nodeIPList)
+				v := utils.NewRemoteVtep(m.ClusterName, m.RemoteClusterUID, vtepIP, vtepMac, node.Name, nodeIPList)
 				update = append(update, v)
 			}
 		} else {
-			v := utils.NewRemoteVtep(m.ClusterName, m.UID, vtepIP, vtepMac, node.Name, nodeIPList)
+			v := utils.NewRemoteVtep(m.ClusterName, m.RemoteClusterUID, vtepIP, vtepMac, node.Name, nodeIPList)
 			add = append(add, v)
 		}
 	}
@@ -167,6 +171,9 @@ func (m *Manager) RunNodeWorker() {
 }
 
 func (m *Manager) filterNode(obj interface{}) bool {
+	if !m.GetMeetCondition() {
+		return false
+	}
 	_, ok := obj.(*apiv1.Node)
 	return ok
 }

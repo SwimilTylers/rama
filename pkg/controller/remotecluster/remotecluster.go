@@ -20,7 +20,7 @@ func (c *Controller) reconcileRemoteCluster(clusterName string) error {
 		}
 		return err
 	}
-	return c.addOrUpdateRemoteClusterManager(remoteCluster)
+	return c.addOrUpdateRCMgr(remoteCluster)
 }
 
 func (c *Controller) filterRemoteCluster(obj interface{}) bool {
@@ -53,7 +53,7 @@ func (c *Controller) enqueueRemoteCluster(clusterName string) {
 
 func (c *Controller) delRemoteCluster(clusterName string) {
 	klog.Infof("deleting cluster=%v.", clusterName)
-	c.remoteClusterManagerCache.Del(clusterName)
+	c.rcMgrCache.Del(clusterName)
 }
 
 func (c *Controller) runRemoteClusterWorker() {
@@ -84,7 +84,7 @@ func (c *Controller) processNextRemoteCluster() bool {
 			return fmt.Errorf("[remote cluster] fail to sync '%v': %v, requeuing", key, err)
 		}
 		c.remoteClusterQueue.Forget(obj)
-		klog.Infof("succeed to sync '%v'", key)
+		klog.Infof("[remote-cluster] succeed to sync '%v'", key)
 		return nil
 	}(obj)
 
