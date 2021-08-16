@@ -133,6 +133,7 @@ func CreateIPtablesManager(protocol Protocol) (*Manager, error) {
 		remoteUnderlaySubnet: []*net.IPNet{},
 		remoteNodeIPList:     []net.IP{},
 		remoteSubnetTracker:  daemonutils.NewSubnetCidrTracker(),
+		remoteCidr:           gset.NewStrSet(),
 	}
 
 	return mgr, nil

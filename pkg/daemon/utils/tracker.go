@@ -17,7 +17,7 @@ func (tracker *SubnetCidrTracker) Refresh() {
 }
 
 func (tracker *SubnetCidrTracker) Track(cidr, cluster string) error {
-	if lastCluster, exists := tracker.subnetClusterMap[cidr]; !exists && cluster == lastCluster {
+	if lastCluster, exists := tracker.subnetClusterMap[cidr]; !exists || cluster == lastCluster {
 		tracker.subnetClusterMap[cidr] = cluster
 	} else {
 		tracker.conflict = fmt.Errorf("cluster %s and cluster %s have a conflict in subnet config (cidr=%s)", lastCluster, cluster, cidr)
