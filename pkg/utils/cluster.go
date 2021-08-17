@@ -17,6 +17,8 @@ import (
 )
 
 const (
+	UUIDAnchor = "kube-system"
+
 	KubeAPIQPS   = 20.0
 	KubeAPIBurst = 30
 )
@@ -54,7 +56,7 @@ func SelectorClusterName(clusterName string) labels.Selector {
 }
 
 func GetUUID(client kubernetes.Interface) (types.UID, error) {
-	ns, err := client.CoreV1().Namespaces().Get(context.TODO(), "kube-system", metav1.GetOptions{})
+	ns, err := client.CoreV1().Namespaces().Get(context.TODO(), UUIDAnchor, metav1.GetOptions{})
 	if err != nil {
 		klog.Errorf("Can't get uuid. err=%v", err)
 		return "", err
