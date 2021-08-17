@@ -174,18 +174,20 @@ func (m *Manager) filterNode(obj interface{}) bool {
 	if !m.GetIsReady() {
 		return false
 	}
-	// todo debug
-	klog.Infof("[RemoteCluster-Node]debug. node=%v", utils.ToJsonString(obj))
 	_, ok := obj.(*apiv1.Node)
 	return ok
 }
 
 func (m *Manager) addOrDelNode(obj interface{}) {
+	// todo debug
+	klog.Infof("[RemoteCluster-Node]debug addOrDelNode. node=%v", utils.ToJsonString(obj))
 	node, _ := obj.(*apiv1.Node)
 	m.enqueueNode(node.Name)
 }
 
 func (m *Manager) updateNode(oldObj, newObj interface{}) {
+	// todo debug
+	klog.Infof("[RemoteCluster-Node]debug updateNode. oldNode=%v\nNewNode=%v", utils.ToJsonString(oldObj), utils.ToJsonString(newObj))
 	oldNode, _ := oldObj.(*apiv1.Node)
 	newNode, _ := newObj.(*apiv1.Node)
 	newNodeAnnotations := newNode.Annotations

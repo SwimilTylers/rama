@@ -10,7 +10,9 @@ import (
 	ramav1 "github.com/oecp/rama/pkg/apis/networking/v1"
 	"github.com/oecp/rama/pkg/utils"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -71,6 +73,13 @@ func validate(rc *ramav1.RemoteCluster) admission.Response {
 	if err != nil {
 		return admission.Denied(fmt.Sprintf("Can't get uuid. Err=%v", err))
 	}
+	localClusterUUID, err := GetLocalClusterUUID()
+	if err != nil {
+		return admission.Denied(fmt.Sprintf("Can't get local cluster uuid. Err=%v", err))
+	}
+	if localClusterUUID != uuid {
+		return admission.Denied("Can't create local cluster's remote cluster")
+	}
 
 	rcs, err := RCLister.List(labels.NewSelector())
 	if err != nil {
@@ -82,4 +91,18 @@ func validate(rc *ramav1.RemoteCluster) admission.Response {
 		}
 	}
 	return admission.Allowed("validation pass")
+}
+
+func GetLocalClusterUUID() (types.UID, error) {
+	config, err := clientcmd.BuildConfigFromFlags("", "")
+	if err != nil {
+		return "", err
+	}
+	// create the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return "", err
+	}
+	uuid, err := utils.GetUUID(clientset)
+	return uuid, err
 }
