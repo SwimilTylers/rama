@@ -179,15 +179,11 @@ func (m *Manager) filterNode(obj interface{}) bool {
 }
 
 func (m *Manager) addOrDelNode(obj interface{}) {
-	// todo debug
-	klog.Infof("[RemoteCluster-Node]debug addOrDelNode. node=%v", utils.ToJsonString(obj))
 	node, _ := obj.(*apiv1.Node)
 	m.enqueueNode(node.Name)
 }
 
 func (m *Manager) updateNode(oldObj, newObj interface{}) {
-	// todo debug
-	klog.Infof("[RemoteCluster-Node]debug updateNode. oldNode=%v\nNewNode=%v", utils.ToJsonString(oldObj), utils.ToJsonString(newObj))
 	oldNode, _ := oldObj.(*apiv1.Node)
 	newNode, _ := newObj.(*apiv1.Node)
 	newNodeAnnotations := newNode.Annotations
@@ -196,8 +192,8 @@ func (m *Manager) updateNode(oldObj, newObj interface{}) {
 	if newNodeAnnotations[constants.AnnotationNodeVtepIP] == "" || newNodeAnnotations[constants.AnnotationNodeVtepMac] == "" {
 		return
 	}
-	if newNodeAnnotations[constants.AnnotationNodeVtepIP] == oldNodeAnnotations[constants.AnnotationIP] &&
-		newNodeAnnotations[constants.AnnotationNodeVtepIP] == oldNodeAnnotations[constants.AnnotationNodeVtepMac] {
+	if newNodeAnnotations[constants.AnnotationNodeVtepIP] == oldNodeAnnotations[constants.AnnotationNodeVtepIP] &&
+		newNodeAnnotations[constants.AnnotationNodeVtepMac] == oldNodeAnnotations[constants.AnnotationNodeVtepMac] {
 		return
 	}
 	m.enqueueNode(newNode.Name)
