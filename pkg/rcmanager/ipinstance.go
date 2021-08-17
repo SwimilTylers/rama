@@ -12,14 +12,13 @@ import (
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/klog"
 )
 
 // reconcile one single node, update/add/remove everything about it's
 // corresponding remote vtep.
 func (m *Manager) reconcileIPInstance(nodeName string) error {
-	klog.Infof("Starting reconcile ipinstance from cluster %v, node name=%v", m.ClusterName, nodeName)
+	klog.Infof("[remote cluster] Starting reconcile ipinstance from cluster %v, node name=%v", m.ClusterName, nodeName)
 	if len(nodeName) == 0 {
 		return nil
 	}
@@ -47,7 +46,7 @@ func (m *Manager) reconcileIPInstance(nodeName string) error {
 		if !k8serror.IsNotFound(err) {
 			return err
 		}
-		remoteVtep = utils.NewRemoteVtep(m.ClusterName, m.UID, vtepIP, vtepMac, node.Name, nil)
+		remoteVtep = utils.NewRemoteVtep(m.ClusterName, m.RemoteClusterUID, vtepIP, vtepMac, node.Name, nil)
 		newVtep = true
 	}
 	curTime := metav1.Now()
@@ -55,7 +54,6 @@ func (m *Manager) reconcileIPInstance(nodeName string) error {
 
 	remoteVtep.Spec.VtepIP = vtepIP
 	remoteVtep.Spec.VtepMAC = vtepMac
-	remoteVtep.Status.LastModifyTime = curTime
 	desired := func() []string {
 		ipList := make([]string, 0)
 		for _, v := range instances {
@@ -67,43 +65,38 @@ func (m *Manager) reconcileIPInstance(nodeName string) error {
 		}
 		return ipList
 	}()
-	actual := remoteVtep.Spec.IPList
+	actual := remoteVtep.Spec.EndpointIPList
 	desiredSet := gset.NewFrom(desired)
 	actualSet := gset.NewFrom(actual)
-
 	remove := actualSet.Diff(desiredSet)
 	add := desiredSet.Diff(actualSet)
-	actualSet.Remove(remove)
-	actualSet.Add(add)
 
+	remoteVtep.Spec.EndpointIPList = func() []string {
+		ipList := make([]string, 0, desiredSet.Size())
+		for _, v := range desiredSet.Slice() {
+			ipList = append(ipList, fmt.Sprint(v))
+		}
+		return ipList
+	}()
 	vtepChanged := vtepIP != "" && vtepMac != "" && (vtepIP != remoteVtep.Spec.VtepIP || vtepMac != remoteVtep.Spec.VtepMAC)
 	ipListChanged := remove.Size() == 0 || add.Size() == 0
 	if !newVtep && !ipListChanged && !vtepChanged {
 		return nil
 	}
-	remoteVtep.Spec.IPList = func() []string {
-		ans := make([]string, 0, actualSet.Size())
-		for _, v := range actualSet.Slice() {
-			ans = append(ans, fmt.Sprint(v))
+
+	if newVtep {
+		remoteVtep, err = m.localClusterRamaClient.NetworkingV1().RemoteVteps().Create(context.TODO(), remoteVtep, metav1.CreateOptions{})
+		if err != nil {
+			return err
 		}
-		return ans
-	}()
-	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if newVtep {
-			_, err := m.localClusterRamaClient.NetworkingV1().RemoteVteps().Create(context.TODO(), remoteVtep, metav1.CreateOptions{})
-			if err != nil {
-				return err
-			}
-		} else {
-			_, err := m.localClusterRamaClient.NetworkingV1().RemoteVteps().Update(context.TODO(), remoteVtep, metav1.UpdateOptions{})
-			if err != nil {
-				return err
-			}
+	} else {
+		remoteVtep, err = m.localClusterRamaClient.NetworkingV1().RemoteVteps().Update(context.TODO(), remoteVtep, metav1.UpdateOptions{})
+		if err != nil {
+			return err
 		}
-		remoteVtep.Status.LastModifyTime = curTime
-		_, err = m.localClusterRamaClient.NetworkingV1().RemoteVteps().UpdateStatus(context.TODO(), remoteVtep, metav1.UpdateOptions{})
-		return err
-	})
+	}
+	remoteVtep.Status.LastModifyTime = curTime
+	_, err = m.localClusterRamaClient.NetworkingV1().RemoteVteps().UpdateStatus(context.TODO(), remoteVtep, metav1.UpdateOptions{})
 	return err
 }
 
@@ -178,6 +171,9 @@ func (m *Manager) processNextIPInstance() bool {
 }
 
 func (m *Manager) filterIPInstance(obj interface{}) bool {
+	if !m.GetIsReady() {
+		return false
+	}
 	_, ok := obj.(*networkingv1.IPInstance)
 	return ok
 }

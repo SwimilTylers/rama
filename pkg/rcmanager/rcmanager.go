@@ -3,6 +3,7 @@ package rcmanager
 import (
 	"fmt"
 	"runtime/debug"
+	"sync"
 
 	jsoniter "github.com/json-iterator/go"
 	networkingv1 "github.com/oecp/rama/pkg/apis/networking/v1"
@@ -28,10 +29,9 @@ const (
 	ByNodeNameIndexer = "nodename"
 )
 
+// Manager Those without the localCluster prefix are the resources of the remote cluster
 type Manager struct {
-	ClusterName              string
-	UID                      types.UID
-	StopCh                   chan struct{}
+	Meta
 	localClusterKubeClient   kubeclientset.Interface
 	localClusterRamaClient   versioned.Interface
 	remoteSubnetLister       listers.RemoteSubnetLister
@@ -58,6 +58,37 @@ type Manager struct {
 	remoteClusterNodeSynced cache.InformerSynced
 }
 
+type Meta struct {
+	ClusterName string
+	// RemoteClusterUID is used to set owner reference
+	RemoteClusterUID types.UID
+	// ClusterUUID represents the corresponding remote cluster's uuid, which is generated
+	// from unique k8s resource
+	ClusterUUID types.UID
+	StopCh      chan struct{}
+	// Only if meet the condition, can create remote cluster's cr
+	// Conditions are:
+	// 1. The remote cluster created the remote-cluster-cr of this cluster
+	// 2. The remote cluster and local cluster both have overlay network
+	// 3. The overlay network id is same with local cluster
+	IsReady     bool
+	IsReadyLock sync.RWMutex
+}
+
+func (m *Manager) GetIsReady() bool {
+	m.IsReadyLock.RLock()
+	defer m.IsReadyLock.RUnlock()
+
+	return m.IsReady
+}
+
+func (m *Manager) SetIsReady(val bool) {
+	m.IsReadyLock.Lock()
+	defer m.IsReadyLock.Unlock()
+
+	m.IsReady = val
+}
+
 func NewRemoteClusterManager(rc *networkingv1.RemoteCluster,
 	localClusterKubeClient kubeclientset.Interface,
 	localClusterRamaClient versioned.Interface,
@@ -72,7 +103,6 @@ func NewRemoteClusterManager(rc *networkingv1.RemoteCluster,
 		}
 	}()
 	klog.Infof("NewRemoteClusterManager %v", rc.Name)
-	stopCh := make(chan struct{})
 
 	config, err := utils.BuildClusterConfig(rc)
 	if err != nil {
@@ -92,14 +122,24 @@ func NewRemoteClusterManager(rc *networkingv1.RemoteCluster,
 	if err := ipInformer.Informer().GetIndexer().AddIndexers(cache.Indexers{
 		ByNodeNameIndexer: indexByNodeName,
 	}); err != nil {
-		klog.Errorf("index by node name failed. err=%v. ", err)
-		return nil, errors.New("Can't add indexer")
+		klog.Errorf("[remote-cluster-manager] index by node name failed. err=%v. ", err)
+		return nil, errors.New("[remote-cluster-manager] Can't add indexer")
+	}
+	uuid, err := utils.GetUUID(kubeClient)
+	if err != nil {
+		return nil, err
 	}
 
-	rcManager := &Manager{
-		ClusterName:              rc.Name,
-		UID:                      rc.UID,
-		StopCh:                   stopCh,
+	stopCh := make(chan struct{})
+
+	rcMgr := &Manager{
+		Meta: Meta{
+			ClusterName:      rc.Name,
+			RemoteClusterUID: rc.UID,
+			ClusterUUID:      uuid,
+			StopCh:           stopCh,
+			IsReady:          false,
+		},
 		localClusterKubeClient:   localClusterKubeClient,
 		localClusterRamaClient:   localClusterRamaClient,
 		remoteSubnetLister:       remoteSubnetLister,
@@ -126,34 +166,33 @@ func NewRemoteClusterManager(rc *networkingv1.RemoteCluster,
 	}
 
 	nodeInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: rcManager.filterNode,
+		FilterFunc: rcMgr.filterNode,
 		Handler: cache.ResourceEventHandlerFuncs{
-			AddFunc:    rcManager.addOrDelNode,
-			UpdateFunc: rcManager.updateNode,
-			DeleteFunc: rcManager.addOrDelNode,
+			AddFunc:    rcMgr.addOrDelNode,
+			UpdateFunc: rcMgr.updateNode,
+			DeleteFunc: rcMgr.addOrDelNode,
 		},
 	})
 
 	subnetInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: rcManager.filterSubnet,
+		FilterFunc: rcMgr.filterSubnet,
 		Handler: cache.ResourceEventHandlerFuncs{
-			AddFunc:    rcManager.addOrDelSubnet,
-			UpdateFunc: rcManager.updateSubnet,
-			DeleteFunc: rcManager.addOrDelSubnet,
+			AddFunc:    rcMgr.addOrDelSubnet,
+			UpdateFunc: rcMgr.updateSubnet,
+			DeleteFunc: rcMgr.addOrDelSubnet,
 		},
 	})
 
 	ipInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: rcManager.filterIPInstance,
+		FilterFunc: rcMgr.filterIPInstance,
 		Handler: cache.ResourceEventHandlerFuncs{
-			AddFunc:    rcManager.addOrDelIPInstance,
-			UpdateFunc: rcManager.updateIPInstance,
-			DeleteFunc: rcManager.addOrDelIPInstance,
+			AddFunc:    rcMgr.addOrDelIPInstance,
+			UpdateFunc: rcMgr.updateIPInstance,
+			DeleteFunc: rcMgr.addOrDelIPInstance,
 		},
 	})
-	rcManager.localClusterKubeClient = localClusterKubeClient
 	klog.Infof("Successfully New Remote Cluster Manager. Cluster=%v", rc.Name)
-	return rcManager, nil
+	return rcMgr, nil
 }
 
 func indexByNodeName(obj interface{}) ([]string, error) {
