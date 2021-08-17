@@ -19,8 +19,8 @@ import (
 const ReconcileNode = "reconcile-node"
 
 // Full update. Update remote vtep expect status
-func (m *Manager) reconcileNode(key string) error {
-	klog.Infof("Starting reconcile node from cluster %v, node name=%v", m.ClusterName, key)
+func (m *Manager) reconcileNode(reconcileNode string) error {
+	klog.Infof("Starting reconcile node from cluster %v", m.ClusterName)
 	nodes, err := m.nodeLister.List(labels.NewSelector())
 	if err != nil {
 		return err
