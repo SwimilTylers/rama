@@ -156,11 +156,11 @@ func (m *Manager) processNextIPInstance() bool {
 			// TODO: use retry handler to
 			// Put the item back on the workqueue to handle any transient errors
 			m.IPQueue.AddRateLimited(key)
-			klog.Warningf("[ipinstance] failed to reconcileIPInstance. key=%v. err=%v", key, err)
-			return fmt.Errorf("[ipinstance] fail to sync '%s' for cluster id=%v: %v, requeuing", key, m.ClusterName, err)
+			klog.Warningf("[RemoteCluster-IPInstance] failed to reconcileIPInstance. key=%v. err=%v", key, err)
+			return fmt.Errorf("[RemoteCluster-IPInstance] fail to sync '%s' for cluster id=%v: %v, requeuing", key, m.ClusterName, err)
 		}
 		m.IPQueue.Forget(obj)
-		klog.Infof("[ipinstance] succeed to sync '%s', cluster id=%v", key, m.ClusterName)
+		klog.Infof("[RemoteCluster-IPInstance] succeed to sync '%s', cluster=%v", key, m.ClusterName)
 		return nil
 	}(obj)
 

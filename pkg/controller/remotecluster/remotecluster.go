@@ -84,7 +84,7 @@ func (c *Controller) processNextRemoteCluster() bool {
 			return fmt.Errorf("[remote cluster] fail to sync '%v': %v, requeuing", key, err)
 		}
 		c.remoteClusterQueue.Forget(obj)
-		klog.Infof("[remote-cluster] succeed to sync '%v'", key)
+		klog.Infof("[remote cluster] succeed to sync '%v'", key)
 		return nil
 	}(obj)
 

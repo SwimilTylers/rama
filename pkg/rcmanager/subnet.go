@@ -281,10 +281,10 @@ func (m *Manager) processNextSubnet() bool {
 			// TODO: use retry handler to
 			// Put the item back on the workqueue to handle any transient errors
 			m.subnetQueue.AddRateLimited(key)
-			return fmt.Errorf("[subnet] fail to sync '%s' for cluster id=%v: %v, requeuing", key, m.ClusterName, err)
+			return fmt.Errorf("[RemoteSubnet] fail to sync %s for cluster %v: %v, requeuing", key, m.ClusterName, err)
 		}
 		m.subnetQueue.Forget(obj)
-		klog.Infof("[subnet] succeed to sync '%s', cluster id=%v", key, m.ClusterName)
+		klog.Infof("[RemoteSubnet] succeed to sync %s, cluster=%v", key, m.ClusterName)
 		return nil
 	}(obj)
 

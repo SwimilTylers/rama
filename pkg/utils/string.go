@@ -27,7 +27,7 @@ func PickFirstNonEmptyString(ss ...string) string {
 	return ""
 }
 
-func MarshalToString(i interface{}) string {
+func ToJsonString(i interface{}) string {
 	s, _ := jsoniter.MarshalToString(i)
 	return s
 }
