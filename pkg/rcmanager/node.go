@@ -17,10 +17,10 @@ import (
 	"k8s.io/klog"
 )
 
-const ReconcileNode = "reconcile-node"
+const ReconcileNode = "ReconcileNode"
 
 // Full update. Update remote vtep expect status
-func (m *Manager) reconcileNode(reconcileNode string) error {
+func (m *Manager) reconcileNode() error {
 	klog.Infof("[RemoteCluster] Starting reconcile node from cluster %v", m.ClusterName)
 	nodes, err := m.nodeLister.List(labels.NewSelector())
 	if err != nil {
@@ -146,7 +146,7 @@ func (m *Manager) processNextNode() bool {
 			m.nodeQueue.Forget(obj)
 			return nil
 		}
-		if err := m.reconcileNode(ReconcileNode); err != nil {
+		if err := m.reconcileNode(); err != nil {
 			// TODO: use retry handler to
 			// Put the item back on the workqueue to handle any transient errors
 			m.nodeQueue.AddRateLimited(key)
@@ -180,7 +180,7 @@ func (m *Manager) filterNode(obj interface{}) bool {
 
 func (m *Manager) addOrDelNode(obj interface{}) {
 	node, _ := obj.(*apiv1.Node)
-	m.enqueueNode(node.Name)
+	m.EnqueueNode(node.Name)
 }
 
 func (m *Manager) updateNode(oldObj, newObj interface{}) {
@@ -196,9 +196,9 @@ func (m *Manager) updateNode(oldObj, newObj interface{}) {
 		newNodeAnnotations[constants.AnnotationNodeVtepMac] == oldNodeAnnotations[constants.AnnotationNodeVtepMac] {
 		return
 	}
-	m.enqueueNode(newNode.Name)
+	m.EnqueueNode(newNode.Name)
 }
 
-func (m *Manager) enqueueNode(nodeName string) {
+func (m *Manager) EnqueueNode(nodeName string) {
 	m.nodeQueue.Add(nodeName)
 }

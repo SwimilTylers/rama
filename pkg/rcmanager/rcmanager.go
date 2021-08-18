@@ -8,22 +8,27 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	networkingv1 "github.com/oecp/rama/pkg/apis/networking/v1"
 	"github.com/oecp/rama/pkg/client/clientset/versioned"
+	"github.com/oecp/rama/pkg/client/clientset/versioned/scheme"
 	"github.com/oecp/rama/pkg/client/informers/externalversions"
 	listers "github.com/oecp/rama/pkg/client/listers/networking/v1"
 	"github.com/oecp/rama/pkg/utils"
 	"github.com/pkg/errors"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	kubeclientset "k8s.io/client-go/kubernetes"
+	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	corev1 "k8s.io/client-go/listers/core/v1"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 )
 
 const (
-	UserAgentName = "RemoteClusterManager"
+	ControllerName = "RemoteClusterManager"
+	UserAgentName  = ControllerName
 
 	// ByNodeNameIndexer nodeName to ipinstance indexer
 	ByNodeNameIndexer = "nodename"
@@ -56,6 +61,7 @@ type Manager struct {
 	IPIndexer               cache.Indexer
 	remoteClusterNodeLister corev1.NodeLister
 	remoteClusterNodeSynced cache.InformerSynced
+	recorder                record.EventRecorder
 }
 
 type Meta struct {
@@ -108,6 +114,11 @@ func NewRemoteClusterManager(rc *networkingv1.RemoteCluster,
 	if err != nil {
 		return nil, err
 	}
+
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartLogging(klog.Infof)
+	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: localClusterKubeClient.CoreV1().Events("")})
+	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: ControllerName})
 
 	kubeClient := kubeclientset.NewForConfigOrDie(config)
 	ramaClient := versioned.NewForConfigOrDie(restclient.AddUserAgent(config, UserAgentName))
@@ -163,6 +174,7 @@ func NewRemoteClusterManager(rc *networkingv1.RemoteCluster,
 		IPIndexer:                ipInformer.Informer().GetIndexer(),
 		remoteClusterNodeLister:  kubeInformerFactory.Core().V1().Nodes().Lister(),
 		remoteClusterNodeSynced:  nodeInformer.Informer().HasSynced,
+		recorder:                 recorder,
 	}
 
 	nodeInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{

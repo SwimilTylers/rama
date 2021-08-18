@@ -47,7 +47,7 @@ var DefaultRamaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		PreRelease: featuregate.Alpha,
 	},
 	MultiCluster: {
-		Default:    false,
+		Default:    true,
 		PreRelease: featuregate.Alpha,
 	},
 }

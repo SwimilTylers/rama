@@ -184,7 +184,6 @@ func (c *Controller) updateRemoteClusterStatus() {
 		r := rc.DeepCopy()
 		manager, exists := c.rcMgrCache.Get(r.Name)
 		if !exists {
-			//_ = c.addOrUpdateRCMgr(r)
 			continue
 		}
 		cnt = cnt + 1
@@ -208,7 +207,11 @@ func (c *Controller) updateSingleRCStatus(manager *rcmanager.Manager, rc *networ
 	defer manager.IsReadyLock.Unlock()
 
 	conditions := CheckCondition(c, manager.RamaClient, manager.ClusterName, InitializeChecker)
-	manager.IsReady = IsReady(conditions)
+	newIsReady := IsReady(conditions)
+	if manager.IsReady == false && newIsReady {
+		manager.IsReady = true
+		ResumeReconcile(manager)
+	}
 
 	updateLastTransitionTime := func() {
 		conditionChanged := false
@@ -238,4 +241,9 @@ func (c *Controller) updateSingleRCStatus(manager *rcmanager.Manager, rc *networ
 	if err != nil {
 		klog.Warningf("[updateSingleRCStatus] can't update remote cluster. err=%v", err)
 	}
+}
+
+func ResumeReconcile(manager *rcmanager.Manager) {
+	manager.EnqueueSubnet(rcmanager.ReconcileSubnet)
+	manager.EnqueueNode(rcmanager.ReconcileNode)
 }

@@ -71,7 +71,7 @@ func validate(rc *ramav1.RemoteCluster) admission.Response {
 	client := kubernetes.NewForConfigOrDie(cfg)
 	uuid, err := utils.GetUUID(client)
 	if err != nil {
-		return admission.Denied(fmt.Sprintf("Can't get uuid. Err=%v", err))
+		return admission.Errored(http.StatusInternalServerError, err)
 	}
 	localClusterUUID, err := GetLocalClusterUUID()
 	if err != nil {
@@ -83,7 +83,7 @@ func validate(rc *ramav1.RemoteCluster) admission.Response {
 
 	rcs, err := RCLister.List(labels.NewSelector())
 	if err != nil {
-		return admission.Denied(fmt.Sprintf("Can't list remote cluster. Err=%v", err))
+		return admission.Errored(http.StatusInternalServerError, err)
 	}
 	for _, rc := range rcs {
 		if uuid == rc.Status.UUID {
