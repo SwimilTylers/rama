@@ -12,6 +12,7 @@ import (
 	"github.com/oecp/rama/pkg/client/informers/externalversions"
 	informers "github.com/oecp/rama/pkg/client/informers/externalversions/networking/v1"
 	listers "github.com/oecp/rama/pkg/client/listers/networking/v1"
+	"github.com/oecp/rama/pkg/metrics"
 	"github.com/oecp/rama/pkg/rcmanager"
 	"github.com/oecp/rama/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -196,13 +197,14 @@ func (c *Controller) updateRemoteClusterStatus() {
 
 func (c *Controller) updateSingleRCStatus(manager *rcmanager.Manager, rc *networkingv1.RemoteCluster, wg *sync.WaitGroup) {
 	rc = rc.DeepCopy()
-	// todo metrics
 	defer func() {
 		if err := recover(); err != nil {
 			klog.Errorf("updateSingleRCStatus panic. err=%v\n%v", err, string(debug.Stack()))
 		}
 	}()
+	defer metrics.RemoteClusterStatusUpdateDurationFromStart(time.Now())
 	defer wg.Done()
+
 	manager.IsReadyLock.Lock()
 	defer manager.IsReadyLock.Unlock()
 
